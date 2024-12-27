@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Wishlist Dapp</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .movie-form {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .movie-form input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .movie-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .movie-card {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-message {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e7f3fe;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎬 Movie Wishlist Blockchain App</h1>
+    
+    <div id="wallet-status">
+        <p>Connect your wallet to get started</p>
+        <button id="connectButton">Connect Wallet</button>
+    </div>
+
+    <div id="app-content" style="display:none;">
+        <div class="movie-form">
+            <h2>Add a Movie to Your Wishlist</h2>
+            <form id="movieForm">
+                <input type="text" id="titleInput" placeholder="Movie Title" required>
+                <input type="text" id="genreInput" placeholder="Genre" required>
+                <input type="number" id="yearInput" placeholder="Release Year" required>
+                <button type="submit">Add Movie</button>
+            </form>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <h2>Your Movie Wishlist</h2>
+        <div id="movieList" class="movie-list"></div>
+    </div>
+
+    <script>
+        // Contract configuration (to be replaced with actual values)
+        const contractAddress = '0x43dcD96D1AE4022F9EC6b6128e1078dd318107F7'; // Deployed contract address
+        const contractABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "movieId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "MovieAdded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "movieId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "liker",
+				"type": "address"
+			}
+		],
+		"name": "MovieLiked",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "movieId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "viewer",
+				"type": "address"
+			}
+		],
+		"name": "MovieWatched",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_genre",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_year",
+				"type": "uint256"
+			}
+		],
+		"name": "addMovie",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_movieId",
+				"type": "uint256"
+			}
+		],
+		"name": "getMovieDetails",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "genre",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "year",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "watched",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "likes",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getUnwatchedMoviesCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			}
+		],
+		"name": "getUserMovies",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "hasLiked",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_movieId",
+				"type": "uint256"
+			}
+		],
+		"name": "likeMovie",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_movieId",
+				"type": "uint256"
+			}
+		],
+		"name": "markMovieAsWatched",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "movieCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "movies",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "title",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "genre",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "year",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "watched",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "likes",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "userMovies",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]; // Your contract ABI
+
+        class MovieWishlistApp {
+            constructor() {
+                this.web3 = null;
+                this.contract = null;
+                this.account = null;
+            }
+
+            async init() {
+                // Check for Web3 provider
+                if (window.ethereum) {
+                    this.web3 = new Web3(window.ethereum);
+                    
+                    // Create contract instance
+                    this.contract = new this.web3.eth.Contract(
+                        contractABI, 
+                        contractAddress
+                    );
+
+                    this.bindEvents();
+                } else {
+                    this.showMessage('Please install MetaMask!', 'error');
+                }
+            }
+
+            bindEvents() {
+                document.getElementById('connectButton').addEventListener('click', () => this.connectWallet());
+                document.getElementById('movieForm').addEventListener('submit', (e) => this.addMovie(e));
+            }
+
+            async connectWallet() {
+                try {
+                    // Request account access
+                    const accounts = await window.ethereum.request({ 
+                        method: 'eth_requestAccounts' 
+                    });
+                    
+                    this.account = accounts[0];
+                    
+                    // Update UI
+                    document.getElementById('wallet-status').style.display = 'none';
+                    document.getElementById('app-content').style.display = 'block';
+                    
+                    this.loadUserMovies();
+                } catch (error) {
+                    this.showMessage('Wallet connection failed', 'error');
+                }
+            }
+
+            async addMovie(event) {
+                event.preventDefault();
+                
+                const title = document.getElementById('titleInput').value;
+                const genre = document.getElementById('genreInput').value;
+                const year = document.getElementById('yearInput').value;
+
+                try {
+                    await this.contract.methods.addMovie(title, genre, year)
+                        .send({ from: this.account });
+                    
+                    this.showMessage('Movie added successfully!', 'success');
+                    this.loadUserMovies();
+                    
+                    // Reset form
+                    event.target.reset();
+                } catch (error) {
+                    this.showMessage('Failed to add movie', 'error');
+                }
+            }
+
+            async loadUserMovies() {
+                try {
+                    // Get user's movie IDs
+                    const movieIds = await this.contract.methods.getUserMovies(this.account).call();
+                    
+                    const movieListElement = document.getElementById('movieList');
+                    movieListElement.innerHTML = ''; // Clear previous movies
+
+                    for (let movieId of movieIds) {
+                        const movie = await this.contract.methods.getMovieDetails(movieId).call();
+                        this.renderMovieCard(movieId, movie);
+                    }
+                } catch (error) {
+                    this.showMessage('Failed to load movies', 'error');
+                }
+            }
+
+            renderMovieCard(movieId, movie) {
+                const movieListElement = document.getElementById('movieList');
+                const movieCard = document.createElement('div');
+                movieCard.classList.add('movie-card');
+                
+                movieCard.innerHTML = `
+                    <h3>${movie.title}</h3>
+                    <p>Genre: ${movie.genre}</p>
+                    <p>Year: ${movie.year}</p>
+                    <p>Likes: ${movie.likes}</p>
+                    <button onclick="app.markWatched(${movieId})" 
+                        ${movie.watched ? 'disabled' : ''}>
+                        ${movie.watched ? 'Watched' : 'Mark Watched'}
+                    </button>
+                `;
+
+                movieListElement.appendChild(movieCard);
+            }
+
+            async markWatched(movieId) {
+                try {
+                    await this.contract.methods.markMovieAsWatched(movieId)
+                        .send({ from: this.account });
+                    
+                    this.showMessage('Movie marked as watched', 'success');
+                    this.loadUserMovies();
+                } catch (error) {
+                    this.showMessage('Failed to mark movie', 'error');
+                }
+            }
+
+            showMessage(message, type) {
+                const statusElement = document.getElementById('statusMessage');
+                statusElement.textContent = message;
+                statusElement.style.backgroundColor = 
+                    type === 'success' ? '#dff0d8' : '#f2dede';
+            }
+        }
+
+        // Initialize the app
+        const app = new MovieWishlistApp();
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
